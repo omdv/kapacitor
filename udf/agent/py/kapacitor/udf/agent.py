@@ -2,18 +2,26 @@
 #
 # Requires protobuf v3
 #   pip install protobuf==3.0.0b2
+from __future__ import absolute_import
+
+from . import udf_pb2
+try:
+    from queue import Queue
+except ImportError:
+    # Must be Python 2
+    from Queue import Queue
 
 import sys
-import udf_pb2
-from threading import Lock, Thread
-from Queue import Queue
-import io
 import traceback
 import socket
 import os
 
 import logging
 logger = logging.getLogger()
+
+# Check for python3
+# https://stackoverflow.com/a/38939320/703144
+PY3K = sys.version_info >= (3, 0)
 
 
 # The Agent calls the appropriate methods on the Handler as requests are read off STDIN.
@@ -51,6 +59,18 @@ class Agent(object):
     def __init__(self, _in=sys.stdin, out=sys.stdout,handler=None):
         self._in = _in
         self._out = out
+
+        if PY3K:
+            if _in == sys.stdin:
+                self._in = _in.buffer
+            else:
+                self._in = _in
+
+            if out == sys.stdout:
+                self._out = out.buffer
+            else:
+                self._out = out
+
         self._thread = None
         self.handler = handler
         self._write_lock = Lock()
@@ -152,10 +172,10 @@ def encodeUvarint(writer, value):
     bits = value & varintMask
     value >>= shiftSize
     while value:
-        writer.write(chr(varintMoreMask|bits))
+        writer.write(chr(varintMoreMask|bits).encode())
         bits = value & varintMask
         value >>= shiftSize
-    return writer.write(chr(bits))
+    return writer.write(chr(bits).encode())
 
 # Decode an unsigned varint, max of 32 bits
 def decodeUvarint32(reader):
